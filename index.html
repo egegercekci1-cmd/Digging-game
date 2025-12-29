@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<title>Katmanlar Altında</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<style>
+  body { margin:0; background:#111; color:white; font-family:Arial; overflow:hidden; }
+  canvas { background:#2b2b2b; display:none; }
+
+  #menu {
+    position:fixed;
+    inset:0;
+    display:flex;
+    flex-direction:column;
+    justify-content:center;
+    align-items:center;
+    gap:20px;
+    background:#111;
+  }
+
+  button {
+    font-size:22px;
+    padding:15px 40px;
+    border:none;
+    border-radius:10px;
+    cursor:pointer;
+  }
+
+  #mobileControls {
+    position:fixed;
+    bottom:20px;
+    left:50%;
+    transform:translateX(-50%);
+    display:none;
+    gap:10px;
+  }
+
+  .ctrl {
+    width:60px;
+    height:60px;
+    font-size:22px;
+    border-radius:50%;
+    background:#444;
+    color:white;
+  }
+</style>
+</head>
+<body>
+
+<div id="menu">
+  <h1>Katmanlar Altında</h1>
+  <p>Nasıl oynamak istiyorsun?</p>
+  <button onclick="start('pc')">💻 PC</button>
+  <button onclick="start('mobile')">📱 Mobil</button>
+</div>
+
+<canvas id="game"></canvas>
+
+<div id="mobileControls">
+  <button class="ctrl" ontouchstart="move('up')">⬆️</button>
+  <div style="display:flex; gap:10px;">
+    <button class="ctrl" ontouchstart="move('left')">⬅️</button>
+    <button class="ctrl" ontouchstart="move('right')">➡️</button>
+  </div>
+  <button class="ctrl" ontouchstart="move('down')">⬇️</button>
+</div>
+
+<script>
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
+canvas.width = innerWidth;
+canvas.height = innerHeight;
+
+const TILE = 40;
+const WORLD_WIDTH = 20;
+const WORLD_HEIGHT = 200;
+
+let platform = null;
+let cameraY = 0;
+
+const world = [];
+for (let y = 0; y < WORLD_HEIGHT; y++) {
+  world[y] = [];
+  for (let x = 0; x < WORLD_WIDTH; x++) {
+    let type = "soil";
+    if (y > 20) type = "hard";
+    if (y > 60) type = "rock";
+    if (y > 120) type = "artifact";
+    world[y][x] = { type, dug:false };
+  }
+}
+
+const player = {
+  x: 10,
+  y: 0
+};
+
+function start(p) {
+  platform = p;
+  document.getElementById("menu").style.display = "none";
+  canvas.style.display = "block";
+  if (platform === "mobile") {
+    document.getElementById("mobileControls").style.display = "flex";
+  }
+  requestAnimationFrame(loop);
+}
+
+function move(dir) {
+  let nx = player.x;
+  let ny = player.y;
+
+  if (dir === "left") nx--;
+  if (dir === "right") nx++;
+  if (dir === "up") ny--;
+  if (dir === "down") ny++;
+
+  if (nx < 0 || nx >= WORLD_WIDTH || ny < 0 || ny >= WORLD_HEIGHT) return;
+
+  world[ny][nx].dug = true;
+  player.x = nx;
+  player.y = ny;
+}
+
+addEventListener("keydown", e => {
+  if (platform !== "pc") return;
+  if (e.key === "ArrowLeft" || e.key === "a") move("left");
+  if (e.key === "ArrowRight" || e.key === "d") move("right");
+  if (e.key === "ArrowUp" || e.key === "w") move("up");
+  if (e.key === "ArrowDown" || e.key === "s") move("down");
+});
+
+function drawTile(x, y, tile) {
+  let color = "#654321";
+  if (tile.type === "hard") color = "#555";
+  if (tile.type === "rock") color = "#333";
+  if (tile.type === "artifact") color = tile.dug ? "#d4af37" : "#222";
+
+  ctx.fillStyle = tile.dug ? "#111" : color;
+  ctx.fillRect(x, y, TILE, TILE);
+}
+
+function loop() {
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+
+  cameraY = player.y * TILE - canvas.height / 2;
+  if (cameraY < 0) cameraY = 0;
+
+  for (let y = 0; y < WORLD_HEIGHT; y++) {
+    for (let x = 0; x < WORLD_WIDTH; x++) {
+      const drawX = x * TILE;
+      const drawY = y * TILE - cameraY;
+      if (drawY > -TILE && drawY < canvas.height) {
+        drawTile(drawX, drawY, world[y][x]);
+      }
+    }
+  }
+
+  // Player
+  ctx.fillStyle = "yellow";
+  ctx.fillRect(
+    player.x * TILE,
+    player.y * TILE - cameraY,
+    TILE,
+    TILE
+  );
+
+  requestAnimationFrame(loop);
+}
+</script>
+
+</body>
+</html>
