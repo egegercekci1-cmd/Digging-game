@@ -5,45 +5,22 @@
 <title>Katmanlar Altında</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <style>
-  body { margin:0; background:#111; color:white; font-family:Arial; overflow:hidden; }
-  canvas { background:#2b2b2b; display:none; }
-
-  #menu {
-    position:fixed;
-    inset:0;
-    display:flex;
-    flex-direction:column;
-    justify-content:center;
-    align-items:center;
-    gap:20px;
-    background:#111;
-  }
-
-  button {
-    font-size:22px;
-    padding:15px 40px;
-    border:none;
-    border-radius:10px;
-    cursor:pointer;
-  }
-
-  #mobileControls {
-    position:fixed;
-    bottom:20px;
-    left:50%;
-    transform:translateX(-50%);
-    display:none;
-    gap:10px;
-  }
-
-  .ctrl {
-    width:60px;
-    height:60px;
-    font-size:22px;
-    border-radius:50%;
-    background:#444;
-    color:white;
-  }
+body { margin:0; background:#111; color:white; font-family:Arial; overflow:hidden; }
+canvas { background:#222; display:none; }
+#menu,#popup{
+  position:fixed; inset:0;
+  display:flex; flex-direction:column;
+  justify-content:center; align-items:center;
+  background:#111; z-index:10;
+}
+#popup{display:none;text-align:center;padding:20px;}
+button{font-size:20px;padding:12px 30px;border:none;border-radius:10px;}
+#mobileControls{
+  position:fixed;bottom:20px;left:50%;
+  transform:translateX(-50%);
+  display:none;gap:10px;z-index:5;
+}
+.ctrl{width:60px;height:60px;border-radius:50%;background:#444;color:white;font-size:22px;}
 </style>
 </head>
 <body>
@@ -57,9 +34,15 @@
 
 <canvas id="game"></canvas>
 
+<div id="popup">
+  <h2 id="popupTitle"></h2>
+  <p id="popupText"></p>
+  <button onclick="closePopup()">Devam Et</button>
+</div>
+
 <div id="mobileControls">
   <button class="ctrl" ontouchstart="move('up')">⬆️</button>
-  <div style="display:flex; gap:10px;">
+  <div style="display:flex;gap:10px;">
     <button class="ctrl" ontouchstart="move('left')">⬅️</button>
     <button class="ctrl" ontouchstart="move('right')">➡️</button>
   </div>
@@ -67,107 +50,143 @@
 </div>
 
 <script>
-const canvas = document.getElementById("game");
-const ctx = canvas.getContext("2d");
-canvas.width = innerWidth;
-canvas.height = innerHeight;
+const canvas=document.getElementById("game");
+const ctx=canvas.getContext("2d");
+canvas.width=innerWidth;
+canvas.height=innerHeight;
 
-const TILE = 40;
-const WORLD_WIDTH = 20;
-const WORLD_HEIGHT = 200;
+const TILE=40;
+const WORLD_WIDTH=20;
+const WORLD_HEIGHT=200;
 
-let platform = null;
-let cameraY = 0;
+let platform=null;
+let cameraY=0;
+let gamePaused=false;
+let foundArtifacts=0;
+let brokenArtifacts=0;
 
-const world = [];
-for (let y = 0; y < WORLD_HEIGHT; y++) {
-  world[y] = [];
-  for (let x = 0; x < WORLD_WIDTH; x++) {
-    let type = "soil";
-    if (y > 20) type = "hard";
-    if (y > 60) type = "rock";
-    if (y > 120) type = "artifact";
-    world[y][x] = { type, dug:false };
+const artifacts=[
+ {name:"Antik Vazo",info:"Seramik kap.",damage:0},
+ {name:"Kemik Parçası",info:"Canlı kalıntısı.",damage:0},
+ {name:"Taş Tablet",info:"Yazılı taş.",damage:0}
+];
+
+const world=[];
+for(let y=0;y<WORLD_HEIGHT;y++){
+ world[y]=[];
+ for(let x=0;x<WORLD_WIDTH;x++){
+  let type="soil";
+  if(y>20) type="hard";
+  if(y>60) type="rock";
+  let artifact=null;
+  if(y>40 && Math.random()<0.02){
+    artifact=JSON.parse(JSON.stringify(
+      artifacts[Math.floor(Math.random()*artifacts.length)]
+    ));
   }
+  world[y][x]={type,dug:false,artifact};
+ }
 }
 
-const player = {
-  x: 10,
-  y: 0
-};
+const player={x:10,y:0};
 
-function start(p) {
-  platform = p;
-  document.getElementById("menu").style.display = "none";
-  canvas.style.display = "block";
-  if (platform === "mobile") {
-    document.getElementById("mobileControls").style.display = "flex";
-  }
-  requestAnimationFrame(loop);
+function start(p){
+ platform=p;
+ document.getElementById("menu").style.display="none";
+ canvas.style.display="block";
+ if(platform==="mobile")
+   document.getElementById("mobileControls").style.display="flex";
+ loop();
 }
 
-function move(dir) {
-  let nx = player.x;
-  let ny = player.y;
+function move(dir){
+ if(gamePaused) return;
 
-  if (dir === "left") nx--;
-  if (dir === "right") nx++;
-  if (dir === "up") ny--;
-  if (dir === "down") ny++;
+ let nx=player.x, ny=player.y;
+ if(dir==="left") nx--;
+ if(dir==="right") nx++;
+ if(dir==="up") ny--;
+ if(dir==="down") ny++;
 
-  if (nx < 0 || nx >= WORLD_WIDTH || ny < 0 || ny >= WORLD_HEIGHT) return;
+ if(nx<0||nx>=WORLD_WIDTH||ny<0||ny>=WORLD_HEIGHT) return;
 
-  world[ny][nx].dug = true;
-  player.x = nx;
-  player.y = ny;
+ const tile=world[ny][nx];
+
+ // HASAR KONTROLÜ
+ if(tile.artifact){
+   tile.artifact.damage++;
+   if(tile.artifact.damage>=2){
+     brokenArtifacts++;
+     showPopup("Eser Kırıldı","Yanlış kazı sonucu eser zarar gördü.");
+     tile.artifact=null;
+     tile.dug=true;
+     player.x=nx; player.y=ny;
+     return;
+   } else {
+     showPopup("Eser Hasar Aldı","Daha dikkatli kazmalısın!");
+     return;
+   }
+ }
+
+ tile.dug=true;
+ player.x=nx;
+ player.y=ny;
+
+ if(tile.artifact){
+   foundArtifacts++;
+ }
 }
 
-addEventListener("keydown", e => {
-  if (platform !== "pc") return;
-  if (e.key === "ArrowLeft" || e.key === "a") move("left");
-  if (e.key === "ArrowRight" || e.key === "d") move("right");
-  if (e.key === "ArrowUp" || e.key === "w") move("up");
-  if (e.key === "ArrowDown" || e.key === "s") move("down");
+addEventListener("keydown",e=>{
+ if(platform!=="pc") return;
+ if(e.key==="ArrowLeft"||e.key==="a") move("left");
+ if(e.key==="ArrowRight"||e.key==="d") move("right");
+ if(e.key==="ArrowUp"||e.key==="w") move("up");
+ if(e.key==="ArrowDown"||e.key==="s") move("down");
 });
 
-function drawTile(x, y, tile) {
-  let color = "#654321";
-  if (tile.type === "hard") color = "#555";
-  if (tile.type === "rock") color = "#333";
-  if (tile.type === "artifact") color = tile.dug ? "#d4af37" : "#222";
-
-  ctx.fillStyle = tile.dug ? "#111" : color;
-  ctx.fillRect(x, y, TILE, TILE);
+function showPopup(t,txt){
+ gamePaused=true;
+ document.getElementById("popupTitle").innerText=t;
+ document.getElementById("popupText").innerText=txt;
+ document.getElementById("popup").style.display="flex";
 }
 
-function loop() {
-  ctx.clearRect(0,0,canvas.width,canvas.height);
+function closePopup(){
+ document.getElementById("popup").style.display="none";
+ gamePaused=false;
+}
 
-  cameraY = player.y * TILE - canvas.height / 2;
-  if (cameraY < 0) cameraY = 0;
+function drawTile(x,y,t){
+ let c="#654321";
+ if(t.type==="hard") c="#555";
+ if(t.type==="rock") c="#333";
+ ctx.fillStyle=t.dug?"#111":c;
+ ctx.fillRect(x,y,TILE,TILE);
+}
 
-  for (let y = 0; y < WORLD_HEIGHT; y++) {
-    for (let x = 0; x < WORLD_WIDTH; x++) {
-      const drawX = x * TILE;
-      const drawY = y * TILE - cameraY;
-      if (drawY > -TILE && drawY < canvas.height) {
-        drawTile(drawX, drawY, world[y][x]);
-      }
-    }
+function loop(){
+ ctx.clearRect(0,0,canvas.width,canvas.height);
+ cameraY=player.y*TILE-canvas.height/2;
+ if(cameraY<0) cameraY=0;
+
+ for(let y=0;y<WORLD_HEIGHT;y++){
+  for(let x=0;x<WORLD_WIDTH;x++){
+   const dy=y*TILE-cameraY;
+   if(dy>-TILE&&dy<canvas.height)
+    drawTile(x*TILE,dy,world[y][x]);
   }
+ }
 
-  // Player
-  ctx.fillStyle = "yellow";
-  ctx.fillRect(
-    player.x * TILE,
-    player.y * TILE - cameraY,
-    TILE,
-    TILE
-  );
+ ctx.fillStyle="yellow";
+ ctx.fillRect(player.x*TILE,player.y*TILE-cameraY,TILE,TILE);
 
-  requestAnimationFrame(loop);
+ ctx.fillStyle="white";
+ ctx.fillText("Sağlam Eser: "+foundArtifacts,10,20);
+ ctx.fillText("Kırık Eser: "+brokenArtifacts,10,40);
+
+ requestAnimationFrame(loop);
 }
 </script>
-
 </body>
 </html>
