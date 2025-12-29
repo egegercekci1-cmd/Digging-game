@@ -5,15 +5,19 @@
 <title>Katmanlar Altında</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <style>
-body{margin:0;background:#111;color:white;font-family:Arial;overflow:hidden}
-canvas{background:#222;display:none}
+body{margin:0;background:#0e0e0e;color:white;font-family:Arial;overflow:hidden}
+canvas{display:none;background:#222}
 #menu,#popup{
  position:fixed;inset:0;display:flex;
  flex-direction:column;justify-content:center;
- align-items:center;background:#111;z-index:10
+ align-items:center;background:#0e0e0e;z-index:10
 }
 #popup{display:none;text-align:center;padding:20px}
-button{font-size:20px;padding:12px 30px;border:none;border-radius:10px}
+button{
+ font-size:20px;padding:12px 30px;
+ border:none;border-radius:12px;
+ background:#c58c3a;color:black
+}
 #mobileControls{
  position:fixed;bottom:20px;left:50%;
  transform:translateX(-50%);
@@ -29,6 +33,7 @@ button{font-size:20px;padding:12px 30px;border:none;border-radius:10px}
 
 <div id="menu">
  <h1>Katmanlar Altında</h1>
+ <p>Arkeolojik Kazı Oyunu</p>
  <button onclick="start('pc')">💻 PC</button>
  <button onclick="start('mobile')">📱 Mobil</button>
 </div>
@@ -56,44 +61,45 @@ const ctx=canvas.getContext("2d");
 canvas.width=innerWidth;
 canvas.height=innerHeight;
 
-const TILE=40, WORLD_WIDTH=20, WORLD_HEIGHT=200;
-let platform=null, cameraY=0, paused=false;
+const TILE=40, WORLD_W=20, WORLD_H=250;
+let cameraY=0, paused=false, platform="pc";
 
+// === IMAGE SYSTEM ===
 const images={};
-const loadImage=(src)=>{
- const img=new Image();
- img.src=src;
- return img;
-};
+function load(src){const i=new Image();i.src=src;return i;}
+images.player=load("assets/player.png");
 
-// TEXTURE YÜKLEME
 ["vase","bone","tablet"].forEach(t=>{
  for(let i=0;i<3;i++){
-  images[`${t}_${i}`]=loadImage(`assets/artifacts/${t}_${i}.png`);
+  images[`${t}_${i}`]=load(`assets/artifacts/${t}_${i}.png`);
  }
 });
 
+// === ARTIFACT TYPES ===
 const artifactTypes=[
  {type:"vase",name:"Antik Vazo",info:"Seramik kap"},
  {type:"bone",name:"Kemik",info:"Canlı kalıntısı"},
  {type:"tablet",name:"Tablet",info:"Yazılı taş"}
 ];
 
+// === WORLD ===
 const world=[];
-for(let y=0;y<WORLD_HEIGHT;y++){
+for(let y=0;y<WORLD_H;y++){
  world[y]=[];
- for(let x=0;x<WORLD_WIDTH;x++){
+ for(let x=0;x<WORLD_W;x++){
   let artifact=null;
-  if(y>40 && Math.random()<0.025){
+  if(y>30 && Math.random()<0.025){
    const a=artifactTypes[Math.floor(Math.random()*artifactTypes.length)];
-   artifact={...a, revealed:false, damage:0};
+   artifact={...a,damage:0,revealed:false};
   }
   world[y][x]={dug:false,artifact};
  }
 }
 
+// === PLAYER ===
 const player={x:10,y:0};
 
+// === START ===
 function start(p){
  platform=p;
  menu.style.display="none";
@@ -102,6 +108,7 @@ function start(p){
  loop();
 }
 
+// === MOVE ===
 function move(dir){
  if(paused) return;
  let nx=player.x, ny=player.y;
@@ -109,18 +116,18 @@ function move(dir){
  if(dir==="right")nx++;
  if(dir==="up")ny--;
  if(dir==="down")ny++;
- if(nx<0||ny<0||nx>=WORLD_WIDTH||ny>=WORLD_HEIGHT) return;
+ if(nx<0||ny<0||nx>=WORLD_W||ny>=WORLD_H) return;
 
  const tile=world[ny][nx];
  tile.dug=true;
 
- // YAN KAZI → ESER ORTAYA ÇIKAR
+ // Yan kazı → eser ortaya çıkar
  [[1,0],[-1,0],[0,1],[0,-1]].forEach(d=>{
   const t=world[ny+d[1]]?.[nx+d[0]];
   if(t?.artifact) t.artifact.revealed=true;
  });
 
- // ESER ÜSTÜNE BASMA
+ // Eser üstüne kazı
  if(tile.artifact && tile.artifact.revealed){
   tile.artifact.damage++;
   if(tile.artifact.damage>=2){
@@ -128,13 +135,13 @@ function move(dir){
    tile.artifact=null;
   }else{
    showPopup("Eser Hasar Aldı","Daha dikkatli kazmalısın!");
-   return;
   }
  }
 
  player.x=nx; player.y=ny;
 }
 
+// === POPUP ===
 function showPopup(t,m){
  paused=true;
  popupTitle.innerText=t;
@@ -146,6 +153,7 @@ function closePopup(){
  paused=false;
 }
 
+// === INPUT ===
 addEventListener("keydown",e=>{
  if(platform!=="pc")return;
  if(e.key==="ArrowLeft"||e.key==="a")move("left");
@@ -154,16 +162,17 @@ addEventListener("keydown",e=>{
  if(e.key==="ArrowDown"||e.key==="s")move("down");
 });
 
+// === LOOP ===
 function loop(){
  ctx.clearRect(0,0,canvas.width,canvas.height);
  cameraY=player.y*TILE-canvas.height/2;
  if(cameraY<0)cameraY=0;
 
- for(let y=0;y<WORLD_HEIGHT;y++){
-  for(let x=0;x<WORLD_WIDTH;x++){
+ for(let y=0;y<WORLD_H;y++){
+  for(let x=0;x<WORLD_W;x++){
    const dy=y*TILE-cameraY;
-   if(dy>-TILE&&dy<canvas.height){
-    ctx.fillStyle=world[y][x].dug?"#111":"#654321";
+   if(dy>-TILE && dy<canvas.height){
+    ctx.fillStyle=world[y][x].dug?"#1a1a1a":"#6b4a2d";
     ctx.fillRect(x*TILE,dy,TILE,TILE);
 
     const a=world[y][x].artifact;
@@ -177,8 +186,14 @@ function loop(){
   }
  }
 
- ctx.fillStyle="yellow";
- ctx.fillRect(player.x*TILE,player.y*TILE-cameraY,TILE,TILE);
+ // PLAYER SPRITE
+ ctx.drawImage(
+  images.player,
+  player.x*TILE+4,
+  player.y*TILE-cameraY+4,
+  TILE-8,
+  TILE-8
+ );
 
  requestAnimationFrame(loop);
 }
